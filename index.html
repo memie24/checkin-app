@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบลงเวลาเข้างาน</title>
+    <!-- นำเข้า LIFF SDK -->
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background-color: #f4f4f4; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        img#profile-img { width: 100px; height: 100px; border-radius: 50%; margin-bottom: 10px; }
+        button { background-color: #06C755; color: white; border: none; padding: 15px 30px; font-size: 16px; border-radius: 5px; width: 100%; margin-top: 20px; cursor: pointer; }
+        button:disabled { background-color: #ccc; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <img id="profile-img" src="https://via.placeholder.com/100" alt="Profile" style="display:none;">
+        <h2 id="display-name">กำลังโหลดข้อมูล...</h2>
+        <p id="status-msg">กรุณารอสักครู่</p>
+        
+        <!-- พื้นที่สำหรับใส่ Video Canvas (สำหรับ face-api.js ในอนาคต) -->
+        <div id="camera-container"></div>
+
+        <button id="checkin-btn" onclick="checkIn()" disabled>📍 บันทึกเวลาเข้างาน</button>
+    </div>
+
+    <script>
+        // 1. นำ URL ที่ได้จากขั้นตอนที่ 1 มาใส่ที่นี่
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbzbKj4-3Nx7Kf_4CSP1eJ0wOiHj_zUuIqXsBpso7wxPK96hj93-sLDY2q8RPN_osXQ_wg/exec"; 
+
+        // 2. ตั้งค่าตัวแปรเก็บข้อมูล
+        let userName = "";
+        let userLat = "";
+        let userLng = "";
+
+        // 3. เริ่มต้น LIFF
+        async function initializeLiff() {
+            try {
+                // นำ LIFF ID จากขั้นตอนที่ 4 มาใส่
+                await liff.init({ liffId: "2010383385-bROORJh7" }); 
+                
+                if (liff.isLoggedIn()) {
+                    const profile = await liff.getProfile();
+                    userName = profile.displayName;
+                    
+                    document.getElementById("display-name").innerText = "สวัสดีคุณ: " + userName;
+                    document.getElementById("profile-img").src = profile.pictureUrl;
+                    document.getElementById("profile-img").style.display = "inline";
+                    
+                    getGPS(); // โหลดข้อมูลเสร็จ ให้ดึง GPS ต่อ
+                } else {
+                    liff.login();
+                }
+            } catch (err) {
+                document.getElementById("status-msg").innerText = "Error: " + err;
+            }
+        }
+
+        // 4. ฟังก์ชันดึงตำแหน่ง GPS
+        function getGPS() {
+            document.getElementById("status-msg").innerText = "กำลังค้นหาตำแหน่ง GPS...";
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLat = position.coords.latitude;
+                        userLng = position.coords.longitude;
+                        document.getElementById("status-msg").innerText = "พบตำแหน่งแล้ว พร้อมเช็คอิน!";
+                        document.getElementById("checkin-btn").disabled = false;
+                    },
+                    (error) => {
+                        document.getElementById("status-msg").innerText = "กรุณาอนุญาตการเข้าถึงตำแหน่ง (GPS)";
+                    }
+                );
+            } else {
+                document.getElementById("status-msg").innerText = "เบราว์เซอร์ไม่รองรับ GPS";
+            }
+        }
+
+        // 5. ฟังก์ชันกดปุ่มเช็คอิน (ส่งไป GAS)
+        async function checkIn() {
+            document.getElementById("checkin-btn").disabled = true;
+            document.getElementById("checkin-btn").innerText = "กำลังบันทึกข้อมูล...";
+
+            const payload = {
+                action: "logAttendance",
+                name: userName, // ใช้ชื่อจาก LINE Profile เลย หรือจะจับคู่กับ User ID ก็ได้
+                lat: userLat,
+                lng: userLng
+            };
+
+            try {
+                let response = await fetch(GAS_URL, {
+                    method: "POST",
+                    body: JSON.stringify(payload)
+                });
+                let result = await response.json();
+                
+                if(result.success) {
+                    alert("บันทึกเวลาสำเร็จ!");
+                    liff.closeWindow(); // บันทึกเสร็จ ปิดหน้าต่าง LIFF อัตโนมัติ
+                } else {
+                    alert("เกิดข้อผิดพลาด: " + result.error);
+                }
+            } catch (error) {
+                alert("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ");
+            }
+            
+            document.getElementById("checkin-btn").innerText = "📍 บันทึกเวลาเข้างาน";
+            document.getElementById("checkin-btn").disabled = false;
+        }
+
+        // เริ่มการทำงานเมื่อหน้าเว็บโหลดเสร็จ
+        window.onload = initializeLiff;
+    </script>
+</body>
+</html>
